@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState } from 'react'
+import { useRef, useMemo, useState, useEffect } from 'react'
 import { useStore, floorsByLevel, markGuideSeen } from '../store'
 import type { ColorMode, LayoutMode } from '../store'
 import { effectiveUnits } from '../model/scenario'
@@ -7,6 +7,10 @@ import { AnalysisControls } from './AnalysisControls'
 import { VerticalEditor } from './VerticalEditor'
 import { SettingsEditor } from './SettingsEditor'
 import { UnitTable } from './UnitTable'
+import { Editor2D } from './Editor2D'
+import { Inspector } from './Inspector'
+import { FloorManager } from './FloorManager'
+import { NewProjectDialog } from './NewProjectDialog'
 import { ScorePanel } from './ScorePanel'
 import { GradeTable } from './GradeTable'
 import { GradeChart } from './GradeChart'
@@ -67,8 +71,9 @@ function Header() {
         disabled={!analysis || !scoring}
         onClick={() => analysis && scoring && exportXlsx(project, analysis, scoring, scenarioName).catch(() => setNotice({ kind: 'error', text: 'xlsx 내보내기에 실패했습니다.' }))}
       >xlsx 내보내기</button>
-      <button onClick={() => !exportPng() && setNotice({ kind: 'error', text: '3D 화면을 찾지 못했습니다.' })}>PNG 저장</button>
-      <button onClick={resetToSample}>샘플 불러오기</button>
+      <button onClick={() => !exportPng() && setNotice({ kind: 'error', text: '3D 화면이 보이는 상태에서 눌러 주세요. (왼쪽 \'층 편집\'에서 3D 또는 나란히 선택)' })}>PNG 저장</button>
+      <button onClick={() => useStore.getState().setShowNew(true)}>새 프로젝트</button>
+      <button onClick={() => (!useStore.getState().history.past.length || window.confirm('편집한 내용이 사라집니다. 샘플을 불러올까요?')) && resetToSample()}>샘플 불러오기</button>
       <button onClick={() => setShowGuide(true)}>사용 안내</button>
     </header>
   )
@@ -130,6 +135,8 @@ function LeftPanel() {
         ))}
       </ul>
 
+      <FloorManager />
+
       <h3>색상 기준</h3>
       <div className="seg">
         {colors.map(([m, label]) => (
@@ -143,16 +150,22 @@ function LeftPanel() {
 }
 
 function RightPanel() {
-  const [tab, setTab] = useState<'info' | 'vertical' | 'settings' | 'score'>('info')
+  const selection = useStore((s) => s.selection)
+  const centerMode = useStore((s) => s.centerMode)
+  const [tab, setTab] = useState<'info' | 'edit' | 'vertical' | 'settings' | 'score'>('info')
+  // 2D에서 요소를 선택하면 '편집' 탭으로 이동
+  useEffect(() => { if (selection && centerMode !== '3d') setTab('edit') }, [selection, centerMode])
   return (
     <aside className="panel right">
       <div className="tabs">
         <button className={tab === 'info' ? 'on' : ''} onClick={() => setTab('info')}>정보</button>
+        <button className={tab === 'edit' ? 'on' : ''} onClick={() => setTab('edit')}>편집</button>
         <button className={tab === 'vertical' ? 'on' : ''} onClick={() => setTab('vertical')}>수직동선</button>
         <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>분석 설정</button>
         <button className={tab === 'score' ? 'on' : ''} onClick={() => setTab('score')}>점수·등급</button>
       </div>
       {tab === 'info' && <InfoTab />}
+      {tab === 'edit' && <Inspector />}
       {tab === 'vertical' && <VerticalEditor />}
       {tab === 'settings' && <SettingsEditor />}
       {tab === 'score' && <ScorePanel />}
@@ -293,6 +306,7 @@ function Guide() {
         <ol>
           <li><b>둘러보기</b> — 마우스로 회전(왼쪽 드래그)·이동(오른쪽 드래그)·확대(휠)하세요. 왼쪽에서 층을 껐다 켜거나 층 간격을 벌려 볼 수 있습니다.</li>
           <li><b>분석 보기</b> — 왼쪽 '분석 보기 모드'에서 통합도·선택도·출입구 깊이를 고르면 건물이 히트맵으로 바뀝니다. 오른쪽 '수직동선' 탭에서 에스컬레이터 위치를 옮겨 보세요. 위쪽 '배치안'에서 A(앵커 3층)/B(앵커 1층)로 업종 배치를 바꿀 수 있습니다.</li>
+          <li><b>직접 그려 보기</b> — 위쪽 '새 프로젝트'로 시작 모양을 고르거나, 왼쪽 '층 편집'에서 '2D 편집'을 켜서 호실·복도를 직접 그리세요.</li>
           <li><b>저장하기</b> — 'JSON 저장'으로 내 컴퓨터에 파일로 저장하고, 다음에 'JSON 불러오기'로 이어서 작업하세요.</li>
         </ol>
         <p className="hint">이 도구는 보정 데이터가 들어가기 전까지 <b>절대값 예측기가 아니라 배치안 상대 비교기</b>입니다. 입력한 데이터는 서버로 전송되지 않습니다.</p>
@@ -305,6 +319,12 @@ function Guide() {
 function Notice() {
   const n = useStore((s) => s.notice)
   const set = useStore((s) => s.setNotice)
+  // 안내 메시지는 잠시 뒤 저절로 사라진다 (오류는 직접 닫을 때까지 유지)
+  useEffect(() => {
+    if (!n || n.kind === 'error') return
+    const t = setTimeout(() => set(null), 6000)
+    return () => clearTimeout(t)
+  }, [n, set])
   if (!n) return null
   return (
     <div className={`notice ${n.kind}`} role="status">
@@ -316,13 +336,15 @@ function Notice() {
 
 export function App() {
   const project = useStore((s) => s.project)
+  const centerMode = useStore((s) => s.centerMode)
   return (
     <div className="app">
       <Header />
       <div className="main">
         <LeftPanel />
         <div className="center">
-          <Viewer3D />
+          {centerMode !== '2d' && <div className="pane"><Viewer3D /></div>}
+          {centerMode !== '3d' && <div className="pane"><Editor2D /></div>}
           <Notice />
           <div className="viewer-hint">{project.meta.site}</div>
         </div>
@@ -331,6 +353,7 @@ export function App() {
       <ResultPanel />
       <footer className="footer">입력한 데이터는 서버로 전송되지 않습니다. 모든 계산과 저장은 이 브라우저 안에서만 이루어집니다.</footer>
       <Guide />
+      <NewProjectDialog />
     </div>
   )
 }
