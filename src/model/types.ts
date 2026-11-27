@@ -123,7 +123,16 @@ export interface Settings {
     elevatorWaitFactor: number // avgWaitSec × 이 값
     elevatorPerFloor: number // 층수 차이 추가 비용(작게)
     stairsPerFloor: number
-    stairsExponent: number // 세 층 이상 급증용 지수
+    stairsExponent: number // 층수 지수 (층수^지수)
+    rampPerFloor: number // 경사로 한 층 비용
+    scissorOffsetM: number // 분절형: 도착 지점과 다음 출발 지점 사이 거리(m)
+  }
+  analysis: {
+    maxSegmentM: number // 복도 세그먼트 최대 길이(m). 긴 복도를 이 길이로 쪼갠다
+    metricWeight: number // 거리 1m당 각도비용 환산값(동률 깨기용 작은 값). 0이면 순수 각도 비용
+    attachToleranceM: number // 수직동선·문·출입구가 복도에 붙을 수 있는 최대 거리(m)
+    visibilityRays: number // 가시성 레이캐스팅 광선 수(전면 반원)
+    visibilityRangeM: number // 가시성 최대 거리(m)
   }
   radii: {
     angular: 'n' // 각도 반경 n(전체)

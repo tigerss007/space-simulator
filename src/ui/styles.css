@@ -17,7 +17,7 @@ label.inline { display: flex; align-items: center; gap: 6px; }
 .main { flex: 1; display: flex; min-height: 0; }
 .panel { width: 230px; background: var(--panel); padding: 10px 12px; overflow-y: auto; flex-shrink: 0; }
 .panel.left { border-right: 1px solid var(--line); }
-.panel.right { border-left: 1px solid var(--line); width: 250px; }
+.panel.right { border-left: 1px solid var(--line); width: 300px; }
 .panel h3, .results h3 { font-size: 13px; margin: 14px 0 6px; display: flex; align-items: center; justify-content: space-between; }
 .panel h3:first-child { margin-top: 2px; }
 .mini button { font-size: 11px; padding: 1px 6px; margin-left: 4px; }
@@ -42,7 +42,7 @@ label.inline { display: flex; align-items: center; gap: 6px; }
 .center { flex: 1; position: relative; min-width: 0; }
 .center canvas { display: block; }
 .viewer-hint { position: absolute; left: 10px; bottom: 8px; font-size: 12px; color: var(--dim); pointer-events: none; }
-.results { background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px; max-height: 170px; overflow: auto; }
+.results { background: var(--panel); border-top: 1px solid var(--line); padding: 8px 12px; height: 230px; overflow: auto; flex-shrink: 0; }
 .results h3 { justify-content: flex-start; gap: 8px; margin: 0 0 6px; }
 table { border-collapse: collapse; font-size: 13px; }
 th, td { padding: 3px 14px; text-align: right; border-bottom: 1px solid var(--line); }
@@ -60,3 +60,21 @@ tr.total td { font-weight: 700; }
   .panel, .panel.right { width: auto; border: none; border-bottom: 1px solid var(--line); }
   .center { min-height: 55vh; flex: none; }
 }
+
+.chips button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.heatbar { height: 12px; border-radius: 6px; margin-top: 6px; }
+.heatlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-top: 2px; }
+.hint.err { color: #b3261e; }
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; align-items: center; }
+.tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.inline-tabs { margin-bottom: 4px; }
+.warnings { margin: 4px 0; padding-left: 16px; font-size: 12px; color: #8a5a00; list-style: none; padding: 0; }
+.tablewrap { overflow: auto; }
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+tbody tr:hover { background: #f1f5fb; }
+.vcard { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 8px; padding: 6px 8px; font-size: 12px; }
+.vcard legend { font-weight: 700; padding: 0 4px; font-size: 12px; }
+.vcard .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+.vcard input[type=number] { padding: 2px 4px; }
+.kv { font-size: 12px; width: 100%; } .kv td { padding: 2px 4px; text-align: left; border: none; } .kv td:last-child { text-align: right; }
+h4 { font-size: 12px; margin: 12px 0 4px; }

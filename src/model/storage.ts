@@ -1,4 +1,5 @@
 import type { Project } from './types'
+import { defaultSettings, mergeDefaults } from './defaults'
 
 const LS_KEY = 'space-simulator:project:v1'
 
@@ -59,7 +60,9 @@ export function parseProject(text: string): ParseResult {
     return { ok: false, errors: ['JSON 형식이 아닙니다. 이 도구에서 저장한 파일인지 확인해 주세요.'] }
   }
   const errors = validateProject(data)
-  return errors.length ? { ok: false, errors } : { ok: true, project: data as Project }
+  if (errors.length) return { ok: false, errors }
+  const project = data as Project
+  return { ok: true, project: { ...project, settings: mergeDefaults(defaultSettings(), project.settings) } }
 }
 
 // ---- 브라우저 자동저장 (localStorage는 막혀 있을 수 있어 항상 try/catch) ----
