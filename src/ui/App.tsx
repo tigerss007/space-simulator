@@ -1,8 +1,13 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useState } from 'react'
 import { useStore, floorsByLevel, markGuideSeen } from '../store'
 import type { ColorMode, LayoutMode } from '../store'
 import { effectiveUnits } from '../model/scenario'
 import { Viewer3D } from './Viewer3D'
+import { AnalysisControls } from './AnalysisControls'
+import { VerticalEditor } from './VerticalEditor'
+import { SettingsEditor } from './SettingsEditor'
+import { UnitTable } from './UnitTable'
+import { fmt } from './heat'
 import { downloadProjectJson, openProjectFile } from './fileio'
 import { CATEGORY_COLORS, ENTRANCE_COLORS, VERTICAL_COLORS, VERTICAL_LABELS, FLOOR_COLORS } from './colors'
 
@@ -117,29 +122,42 @@ function LeftPanel() {
         ))}
       </div>
 
-      <h3>분석 보기 모드</h3>
-      <div className="chips">
-        {['통합도', '선택도', '출입구 깊이', '통행량', '호실 등급'].map((m) => (
-          <button key={m} disabled title="다음 단계에서 추가됩니다">{m}</button>
-        ))}
-      </div>
-      <p className="hint">분석 기능은 Phase 2부터 순서대로 추가됩니다.</p>
+      <AnalysisControls />
     </aside>
   )
 }
 
 function RightPanel() {
+  const [tab, setTab] = useState<'info' | 'vertical' | 'settings'>('info')
+  return (
+    <aside className="panel right">
+      <div className="tabs">
+        <button className={tab === 'info' ? 'on' : ''} onClick={() => setTab('info')}>정보</button>
+        <button className={tab === 'vertical' ? 'on' : ''} onClick={() => setTab('vertical')}>수직동선</button>
+        <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>분석 설정</button>
+      </div>
+      {tab === 'info' && <InfoTab />}
+      {tab === 'vertical' && <VerticalEditor />}
+      {tab === 'settings' && <SettingsEditor />}
+    </aside>
+  )
+}
+
+function InfoTab() {
   const project = useStore((s) => s.project)
   const colorMode = useStore((s) => s.colorMode)
   const hoverId = useStore((s) => s.hoverUnitId)
   const scenarioId = useStore((s) => s.scenarioId)
+  const analysis = useStore((s) => s.analysis)
+  const rk = useStore((s) => s.radiusKey)
   const hovered = useMemo(
     () => effectiveUnits(project, scenarioId).find((u) => u.id === hoverId),
     [project, scenarioId, hoverId],
   )
+  const res = analysis?.units.find((u) => u.unitId === hoverId)
   const floorName = (id: string) => project.floors.find((f) => f.id === id)?.name ?? id
   return (
-    <aside className="panel right">
+    <>
       <h3>선택 호실</h3>
       {hovered ? (
         <dl className="info">
@@ -148,7 +166,14 @@ function RightPanel() {
           <dt>업종</dt><dd>{hovered.category || '(미지정)'}{hovered.isAnchor ? ' · 앵커' : ''}</dd>
           <dt>면적</dt><dd>{hovered.area.toLocaleString()}㎡</dd>
           <dt>전면 폭</dt><dd>{hovered.frontageWidth}m</dd>
-          <dt>잠금</dt><dd>{hovered.locked ? '예' : '아니오'}</dd>
+          {res && (
+            <>
+              <dt>통합도</dt><dd>{fmt(res.metrics[rk]?.nain)}</dd>
+              <dt>선택도</dt><dd>{fmt(res.metrics[rk]?.nach)}</dd>
+              <dt>출입구 깊이</dt><dd>{fmt(res.entranceDepth)}</dd>
+              <dt>가시성</dt><dd>{fmt(res.visibility, 0)}㎡</dd>
+            </>
+          )}
         </dl>
       ) : (
         <p className="hint">3D 화면에서 호실 위로 마우스를 올려 보세요.</p>
@@ -170,15 +195,16 @@ function RightPanel() {
           <li key={k}><span className="dot sq" style={{ background: c }} />{VERTICAL_LABELS[k]}</li>
         ))}
       </ul>
-      <h3>변수 패널</h3>
-      <p className="hint">수직동선 비용·분석 반경·외부 요인·점수 가중치·등급 기준·임대료·시뮬레이션 설정은 이후 단계에서 이 자리에 추가됩니다.</p>
-    </aside>
+      <p className="hint">점수 가중치·등급·임대료·외부 요인·시뮬레이션 설정은 이후 단계에서 추가됩니다.</p>
+    </>
   )
 }
 
 function ResultPanel() {
   const project = useStore((s) => s.project)
   const scenarioId = useStore((s) => s.scenarioId)
+  const analysis = useStore((s) => s.analysis)
+  const [tab, setTab] = useState<'units' | 'floors'>('units')
   const rows = useMemo(() => {
     const units = effectiveUnits(project, scenarioId)
     return floorsByLevel(project).reverse().map((f) => {
@@ -191,23 +217,37 @@ function ResultPanel() {
       }
     })
   }, [project, scenarioId])
+  const warnings = analysis?.warnings ?? []
   return (
     <section className="results">
-      <h3>층별 요약 <span className="dim">(등급표·차트·배치안 비교는 이후 단계에서 추가됩니다)</span></h3>
-      <table>
-        <thead><tr><th>층</th><th>호실 수</th><th>임대 면적(㎡)</th><th>앵커 수</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.floor}><td>{r.floor}</td><td>{r.count}</td><td>{r.area.toLocaleString()}</td><td>{r.anchors}</td></tr>
-          ))}
-          <tr className="total">
-            <td>합계</td>
-            <td>{rows.reduce((a, r) => a + r.count, 0)}</td>
-            <td>{rows.reduce((a, r) => a + r.area, 0).toLocaleString()}</td>
-            <td>{rows.reduce((a, r) => a + r.anchors, 0)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div className="tabs inline-tabs">
+        <button className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>호실별 분석</button>
+        <button className={tab === 'floors' ? 'on' : ''} onClick={() => setTab('floors')}>층별 요약</button>
+        <span className="dim">등급표·차트·배치안 비교는 이후 단계에서 추가됩니다</span>
+      </div>
+      {warnings.length > 0 && (
+        <ul className="warnings">
+          {warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
+        </ul>
+      )}
+      {tab === 'units' ? (
+        <UnitTable />
+      ) : (
+        <table>
+          <thead><tr><th>층</th><th>호실 수</th><th>임대 면적(㎡)</th><th>앵커 수</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.floor}><td>{r.floor}</td><td>{r.count}</td><td>{r.area.toLocaleString()}</td><td>{r.anchors}</td></tr>
+            ))}
+            <tr className="total">
+              <td>합계</td>
+              <td>{rows.reduce((a, r) => a + r.count, 0)}</td>
+              <td>{rows.reduce((a, r) => a + r.area, 0).toLocaleString()}</td>
+              <td>{rows.reduce((a, r) => a + r.anchors, 0)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
     </section>
   )
 }
@@ -224,7 +264,7 @@ function Guide() {
         <p>복합개발 상업시설의 층·호실·복도·수직동선을 3D로 보고, 배치안을 서로 비교하기 위한 도구입니다. 지금 보이는 건물은 <b>샘플 프로젝트</b>입니다.</p>
         <ol>
           <li><b>둘러보기</b> — 마우스로 회전(왼쪽 드래그)·이동(오른쪽 드래그)·확대(휠)하세요. 왼쪽에서 층을 껐다 켜거나 층 간격을 벌려 볼 수 있습니다.</li>
-          <li><b>배치안 바꿔보기</b> — 위쪽 '배치안'에서 A(앵커 3층)와 B(앵커 1층)를 바꾸면 업종 배치가 달라집니다.</li>
+          <li><b>분석 보기</b> — 왼쪽 '분석 보기 모드'에서 통합도·선택도·출입구 깊이를 고르면 건물이 히트맵으로 바뀝니다. 오른쪽 '수직동선' 탭에서 에스컬레이터 위치를 옮겨 보세요. 위쪽 '배치안'에서 A(앵커 3층)/B(앵커 1층)로 업종 배치를 바꿀 수 있습니다.</li>
           <li><b>저장하기</b> — 'JSON 저장'으로 내 컴퓨터에 파일로 저장하고, 다음에 'JSON 불러오기'로 이어서 작업하세요.</li>
         </ol>
         <p className="hint">이 도구는 보정 데이터가 들어가기 전까지 <b>절대값 예측기가 아니라 배치안 상대 비교기</b>입니다. 입력한 데이터는 서버로 전송되지 않습니다.</p>

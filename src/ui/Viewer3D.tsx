@@ -5,6 +5,7 @@ import * as THREE from 'three'
 import { useStore, floorsByLevel } from '../store'
 import { effectiveUnits } from '../model/scenario'
 import type { Floor, Project, Unit, Vec2 } from '../model/types'
+import { heatColor, normalize, nodeValue, unitValue, valueRange } from './heat'
 import { categoryColor, ENTRANCE_COLORS, FLOOR_COLORS, UNKNOWN_COLOR, VERTICAL_COLORS } from './colors'
 
 // 평면 (x, y) → 3D (x, 높이, -y)
@@ -86,11 +87,24 @@ function Scene() {
   const project = useStore((s) => s.project)
   const scenarioId = useStore((s) => s.scenarioId)
   const colorMode = useStore((s) => s.colorMode)
+  const analysis = useStore((s) => s.analysis)
+  const metric = useStore((s) => s.viewMetric)
+  const radiusKey = useStore((s) => s.radiusKey)
   const { sorted, yOf, shown } = useFloorLayout()
+  const heat = analysis && metric ? { a: analysis, m: metric, range: valueRange(analysis, metric, radiusKey) } : null
+  const unitRes = useMemo(() => new Map((analysis?.units ?? []).map((u) => [u.unitId, u])), [analysis])
   const units = useMemo(() => effectiveUnits(project, scenarioId), [project, scenarioId])
   const floorIndex = Object.fromEntries(sorted.map((f, i) => [f.id, i]))
 
-  const colorOf = (u: Unit) =>
+  const colorOf = (u: Unit) => {
+    if (heat) {
+      const r = unitRes.get(u.id)
+      const v = r ? unitValue(r, heat.m, radiusKey) : null
+      return v === null ? '#cfd3da' : heatColor(normalize(v, heat.range, heat.m))
+    }
+    return baseColor(u)
+  }
+  const baseColor = (u: Unit) =>
     colorMode === 'plain' ? '#c9ced6'
       : colorMode === 'floor' ? FLOOR_COLORS[floorIndex[u.floorId] % FLOOR_COLORS.length]
       : u.category ? categoryColor(u.category) : UNKNOWN_COLOR
@@ -116,6 +130,20 @@ function Scene() {
           />
         ) : null,
       )}
+
+      {heat &&
+        heat.a.nodes.map((n) => {
+          if (!shown[n.floorId]) return null
+          const v = nodeValue(n, heat.m, radiusKey)
+          if (v === null) return null
+          const ang = Math.atan2(n.b[1] - n.a[1], n.b[0] - n.a[0])
+          return (
+            <mesh key={n.id} position={p3(n.mid, yOf[n.floorId] + 0.12)} rotation={[0, ang, 0]}>
+              <boxGeometry args={[Math.max(n.length - 0.15, 0.1), 0.12, 3]} />
+              <meshStandardMaterial color={heatColor(normalize(v, heat.range, heat.m))} />
+            </mesh>
+          )
+        })}
 
       {project.corridors.map((c) =>
         shown[c.floorId] ? (

@@ -1,10 +1,13 @@
 import { create } from 'zustand'
-import type { Project } from './model/types'
+import type { Project, Settings, Vertical } from './model/types'
+import type { AnalysisResult } from './engine/analyze'
+import { runAnalysis } from './engine/client'
 import { createSampleProject } from './model/sample'
 import { loadFromLocal, saveToLocal } from './model/storage'
 
 export type LayoutMode = 'all' | 'explode' | 'single' // 전체 / 층 분리 / 한 층만
 export type ColorMode = 'category' | 'floor' | 'plain' // 업종 / 층 / 단색
+export type ViewMetric = 'nain' | 'nach' | 'depth' | 'visibility' // 통합도 / 선택도 / 출입구 깊이 / 가시성
 
 interface State {
   project: Project
@@ -15,6 +18,11 @@ interface State {
   singleFloorId: string
   colorMode: ColorMode
   hoverUnitId: string | null
+  analysis: AnalysisResult | null
+  analysisStatus: 'idle' | 'running' | 'error'
+  analysisError: string | null
+  viewMetric: ViewMetric | null // null이면 업종/층 색상 보기
+  radiusKey: string // 'n' 또는 metric 반경(m)
   showGuide: boolean
   notice: { kind: 'info' | 'error'; text: string } | null
 
@@ -29,6 +37,10 @@ interface State {
   setSingleFloor: (id: string) => void
   setColorMode: (m: ColorMode) => void
   setHoverUnit: (id: string | null) => void
+  setViewMetric: (m: ViewMetric | null) => void
+  setRadiusKey: (k: string) => void
+  updateVertical: (id: string, fn: (v: Vertical) => Vertical) => void
+  updateSettings: (fn: (s: Settings) => Settings) => void
   setShowGuide: (v: boolean) => void
   setNotice: (n: State['notice']) => void
 }
@@ -67,6 +79,11 @@ export const useStore = create<State>((set, get) => ({
   singleFloorId: defaultSingle(initial),
   colorMode: 'category',
   hoverUnitId: null,
+  analysis: null,
+  analysisStatus: 'idle',
+  analysisError: null,
+  viewMetric: null,
+  radiusKey: 'n',
   showGuide: !guideSeen(),
   notice: null,
 
@@ -89,6 +106,11 @@ export const useStore = create<State>((set, get) => ({
   setSingleFloor: (singleFloorId) => set({ singleFloorId }),
   setColorMode: (colorMode) => set({ colorMode }),
   setHoverUnit: (hoverUnitId) => set({ hoverUnitId }),
+  setViewMetric: (viewMetric) => set({ viewMetric }),
+  setRadiusKey: (radiusKey) => set({ radiusKey }),
+  updateVertical: (id, fn) =>
+    set((s) => ({ project: { ...s.project, verticals: s.project.verticals.map((v) => (v.id === id ? fn(v) : v)) } })),
+  updateSettings: (fn) => set((s) => ({ project: { ...s.project, settings: fn(s.project.settings) } })),
   setShowGuide: (showGuide) => set({ showGuide }),
   setNotice: (notice) => set({ notice }),
 }))
@@ -100,5 +122,33 @@ useStore.subscribe((s, prev) => {
   clearTimeout(timer)
   timer = setTimeout(() => saveToLocal(useStore.getState().project), 400)
 })
+
+// 분석에 영향을 주는 입력이 바뀌면(이름만 바뀐 경우 제외) 잠시 뒤 Worker에서 다시 계산한다.
+const analysisInputs = (p: Project) => [p.floors, p.units, p.corridors, p.unitDoors, p.entrances, p.verticals, p.settings]
+let aTimer: ReturnType<typeof setTimeout> | undefined
+let aSeq = 0
+function scheduleAnalysis(delay = 120) {
+  clearTimeout(aTimer)
+  useStore.setState({ analysisStatus: 'running' })
+  aTimer = setTimeout(() => {
+    const my = ++aSeq
+    runAnalysis(useStore.getState().project).then(
+      (analysis) => {
+        if (my !== aSeq) return // 더 최근 요청이 있으면 버린다
+        const { radiusKey } = useStore.getState()
+        useStore.setState({
+          analysis, analysisStatus: 'idle', analysisError: null,
+          radiusKey: analysis.radiusKeys.includes(radiusKey) ? radiusKey : 'n',
+        })
+      },
+      (e: Error) => { if (my === aSeq) useStore.setState({ analysisStatus: 'error', analysisError: e.message }) },
+    )
+  }, delay)
+}
+useStore.subscribe((s, prev) => {
+  const a = analysisInputs(s.project), b = analysisInputs(prev.project)
+  if (a.some((x, i) => x !== b[i])) scheduleAnalysis()
+})
+scheduleAnalysis(0)
 
 export const floorsByLevel = sortedFloors
