@@ -1,13 +1,15 @@
 import type { AnalysisResult, NodeResult, UnitResult } from '../engine/analyze'
 import type { ViewMetric } from '../store'
 
-export const METRIC_LABEL: Record<ViewMetric, string> = {
+export type HeatMetric = Exclude<ViewMetric, 'grade'>
+
+export const METRIC_LABEL: Record<HeatMetric, string> = {
   nain: '통합도 (NAIN)',
   nach: '선택도 (NACH)',
   depth: '출입구 깊이',
   visibility: '가시성',
 }
-export const METRIC_HELP: Record<ViewMetric, string> = {
+export const METRIC_HELP: Record<HeatMetric, string> = {
   nain: '값이 클수록 다른 모든 곳에서 접근하기 쉬운 자리',
   nach: '값이 클수록 지나다니는 길목에 있는 자리',
   depth: '값이 작을수록 주출입구에서 가까운 자리 (붉을수록 유리)',
@@ -15,13 +17,13 @@ export const METRIC_HELP: Record<ViewMetric, string> = {
 }
 export const RADIUS_LABEL = (k: string) => (k === 'n' ? '전체(각도 n)' : `${k}m 이내`)
 
-export function nodeValue(n: NodeResult, m: ViewMetric, rk: string): number | null {
+export function nodeValue(n: NodeResult, m: HeatMetric, rk: string): number | null {
   if (m === 'depth') return n.depth
   if (m === 'visibility') return null
   const s = n.metrics[rk]
   return s ? (m === 'nain' ? s.nain : s.nach) : null
 }
-export function unitValue(u: UnitResult, m: ViewMetric, rk: string): number | null {
+export function unitValue(u: UnitResult, m: HeatMetric, rk: string): number | null {
   if (m === 'depth') return u.entranceDepth
   if (m === 'visibility') return u.visibility
   if (u.nodeId === null) return null
@@ -29,7 +31,7 @@ export function unitValue(u: UnitResult, m: ViewMetric, rk: string): number | nu
   return s ? (m === 'nain' ? s.nain : s.nach) : null
 }
 
-export function valueRange(a: AnalysisResult, m: ViewMetric, rk: string): [number, number] {
+export function valueRange(a: AnalysisResult, m: HeatMetric, rk: string): [number, number] {
   const vals = [
     ...a.nodes.map((n) => nodeValue(n, m, rk)),
     ...a.units.map((u) => unitValue(u, m, rk)),
@@ -54,7 +56,7 @@ export function heatColor(t: number): string {
 export const HEAT_GRADIENT = `linear-gradient(to right, ${STOPS.join(', ')})`
 
 // 값 → 0~1 (깊이는 작을수록 좋으므로 뒤집는다)
-export function normalize(v: number, range: [number, number], m: ViewMetric): number {
+export function normalize(v: number, range: [number, number], m: HeatMetric): number {
   const [lo, hi] = range
   const t = hi - lo < 1e-12 ? 0.5 : (v - lo) / (hi - lo)
   return m === 'depth' ? 1 - t : t

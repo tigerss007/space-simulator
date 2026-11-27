@@ -148,6 +148,7 @@ export interface Settings {
     floorBonus: number
     frontage: number
   }
+  floorAdjust: Record<string, number> // 층 보정값(층 id → 값). 높을수록 유리한 층
   grade: { sMax: number; aMax: number; bMax: number } // 상위 백분율 경계 (10, 35, 70)
   rent: { baseRentPerM2: number; multipliers: { S: number; A: number; B: number; C: number } }
   external: { beta: number } // 보행분 감쇠 계수

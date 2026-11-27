@@ -39,3 +39,7 @@ export const VERTICAL_LABELS: Record<string, string> = {
   ramp: '경사로',
   bridge: '브릿지',
 }
+
+// 등급은 순서가 있는 값이라 한 가지 색의 진하기로 구분한다 (S가 가장 진함).
+export const GRADE_COLORS: Record<string, string> = { S: '#08306b', A: '#2171b5', B: '#6baed6', C: '#c6dbef' }
+export const GRADE_TEXT: Record<string, string> = { S: '#ffffff', A: '#ffffff', B: '#1d2433', C: '#1d2433' }

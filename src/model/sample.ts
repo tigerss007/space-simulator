@@ -115,7 +115,7 @@ export function createSampleProject(): Project {
       transit: [{ name: '지하철역', dailyRidership: 40000, walkDistanceM: 60, directionEntranceId: 'ent-subway' }],
       attractors: [{ name: '학원가', type: '학원가', size: 40, walkDistanceM: 250, directionEntranceId: 'ent-apt' }],
     },
-    settings: defaultSettings(),
+    settings: { ...defaultSettings(), floorAdjust: { B1: 0.3, '1F': 1, '2F': 0.5, '3F': 0 } },
     scenarios: [
       { id: 'scn-a', name: '배치안 A: 앵커 3층', overrides: { units: anchorOverrides('3F') } },
       { id: 'scn-b', name: '배치안 B: 앵커 1층', overrides: { units: anchorOverrides('1F') } },

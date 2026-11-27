@@ -7,7 +7,7 @@ import { loadFromLocal, saveToLocal } from './model/storage'
 
 export type LayoutMode = 'all' | 'explode' | 'single' // 전체 / 층 분리 / 한 층만
 export type ColorMode = 'category' | 'floor' | 'plain' // 업종 / 층 / 단색
-export type ViewMetric = 'nain' | 'nach' | 'depth' | 'visibility' // 통합도 / 선택도 / 출입구 깊이 / 가시성
+export type ViewMetric = 'nain' | 'nach' | 'depth' | 'visibility' | 'grade' // 통합도 / 선택도 / 출입구 깊이 / 가시성 / 호실 등급
 
 interface State {
   project: Project
@@ -124,7 +124,7 @@ useStore.subscribe((s, prev) => {
 })
 
 // 분석에 영향을 주는 입력이 바뀌면(이름만 바뀐 경우 제외) 잠시 뒤 Worker에서 다시 계산한다.
-const analysisInputs = (p: Project) => [p.floors, p.units, p.corridors, p.unitDoors, p.entrances, p.verticals, p.settings]
+const analysisInputs = (p: Project) => [p.floors, p.units, p.corridors, p.unitDoors, p.entrances, p.verticals, p.settings.vertical, p.settings.analysis, p.settings.radii]
 let aTimer: ReturnType<typeof setTimeout> | undefined
 let aSeq = 0
 function scheduleAnalysis(delay = 120) {

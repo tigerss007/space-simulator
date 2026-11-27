@@ -18,6 +18,7 @@ export const defaultSettings = (): Settings => ({
   analysis: { maxSegmentM: 8, metricWeight: 0.004, attachToleranceM: 6, visibilityRays: 90, visibilityRangeM: 60 },
   radii: { angular: 'n', metric: [50, 100, 200], selectedMetric: 100 },
   weights: { nain: 1, nach: 0.7, entranceDepth: 0.8, visibility: 0.5, traffic: 1, floorBonus: 0.4, frontage: 0.3 },
+  floorAdjust: {},
   grade: { sMax: 10, aMax: 35, bMax: 70 },
   rent: { baseRentPerM2: 50000, multipliers: { S: 1.5, A: 1.2, B: 1.0, C: 0.7 } },
   external: { beta: 0.1 },
