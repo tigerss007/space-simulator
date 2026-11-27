@@ -1,8 +1,11 @@
 import { useStore } from '../store'
-import type { ViewMetric } from '../store'
+import type { HeatMetric } from './heat'
+import { GRADES } from '../scoring/score'
+import { GRADE_COLORS } from './colors'
+import { useScoring } from './useScoring'
 import { HEAT_GRADIENT, METRIC_HELP, METRIC_LABEL, RADIUS_LABEL, fmt, valueRange } from './heat'
 
-const METRICS: ViewMetric[] = ['nain', 'nach', 'depth', 'visibility']
+const METRICS: HeatMetric[] = ['nain', 'nach', 'depth', 'visibility']
 
 // 왼쪽 패널: 분석 보기 모드, 반경 선택, 범례
 export function AnalysisControls() {
@@ -13,8 +16,10 @@ export function AnalysisControls() {
   const err = useStore((s) => s.analysisError)
   const rk = useStore((s) => s.radiusKey)
   const setRk = useStore((s) => s.setRadiusKey)
-  const usesRadius = metric === 'nain' || metric === 'nach'
-  const range = analysis && metric ? valueRange(analysis, metric, rk) : null
+  const scoring = useScoring()
+  const hm: HeatMetric | null = metric && metric !== 'grade' ? metric : null
+  const usesRadius = hm === 'nain' || hm === 'nach'
+  const range = analysis && hm ? valueRange(analysis, hm, rk) : null
 
   return (
     <>
@@ -27,10 +32,20 @@ export function AnalysisControls() {
           </button>
         ))}
         <button disabled title="Phase 5에서 추가됩니다">통행량</button>
-        <button disabled title="Phase 3에서 추가됩니다">호실 등급</button>
+        <button className={metric === 'grade' ? 'on' : ''} disabled={!analysis} onClick={() => setMetric('grade')}>호실 등급</button>
       </div>
       {err && <p className="hint err">분석 오류: {err}</p>}
-      {metric && analysis && (
+      {metric === 'grade' && scoring && (
+        <>
+          <p className="hint">점수 순위(상위 백분율)로 등급을 매깁니다. 진할수록 상위 등급입니다.</p>
+          <ul className="legend one">
+            {GRADES.map((g) => (
+              <li key={g}><span className="dot" style={{ background: GRADE_COLORS[g], border: '1px solid #8a93a3' }} />{g}등급 {scoring.gradeSummary[g].count}개</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {hm && analysis && (
         <>
           {usesRadius && (
             <label className="slider">
@@ -42,7 +57,7 @@ export function AnalysisControls() {
               </select>
             </label>
           )}
-          <p className="hint">{METRIC_HELP[metric]}</p>
+          <p className="hint">{METRIC_HELP[hm!]}</p>
           <div className="heatbar" style={{ background: HEAT_GRADIENT }} />
           <div className="heatlabels">
             <span>{metric === 'depth' ? '멀다(불리)' : '낮음'} {range && fmt(metric === 'depth' ? range[1] : range[0])}</span>

@@ -7,6 +7,12 @@ import { AnalysisControls } from './AnalysisControls'
 import { VerticalEditor } from './VerticalEditor'
 import { SettingsEditor } from './SettingsEditor'
 import { UnitTable } from './UnitTable'
+import { ScorePanel } from './ScorePanel'
+import { GradeTable } from './GradeTable'
+import { GradeChart } from './GradeChart'
+import { useScoring } from './useScoring'
+import { exportPng, exportXlsx } from './exporters'
+import { GRADE_COLORS, GRADE_TEXT } from './colors'
 import { fmt } from './heat'
 import { downloadProjectJson, openProjectFile } from './fileio'
 import { CATEGORY_COLORS, ENTRANCE_COLORS, VERTICAL_COLORS, VERTICAL_LABELS, FLOOR_COLORS } from './colors'
@@ -19,6 +25,10 @@ function Header() {
   const resetToSample = useStore((s) => s.resetToSample)
   const setShowGuide = useStore((s) => s.setShowGuide)
   const fileRef = useRef<HTMLInputElement>(null)
+  const analysis = useStore((s) => s.analysis)
+  const setNotice = useStore((s) => s.setNotice)
+  const scoring = useScoring()
+  const scenarioName = project.scenarios.find((x) => x.id === scenarioId)?.name ?? '(기본 배치)'
   return (
     <header className="topbar">
       <input
@@ -53,6 +63,11 @@ function Header() {
           e.target.value = ''
         }}
       />
+      <button
+        disabled={!analysis || !scoring}
+        onClick={() => analysis && scoring && exportXlsx(project, analysis, scoring, scenarioName).catch(() => setNotice({ kind: 'error', text: 'xlsx 내보내기에 실패했습니다.' }))}
+      >xlsx 내보내기</button>
+      <button onClick={() => !exportPng() && setNotice({ kind: 'error', text: '3D 화면을 찾지 못했습니다.' })}>PNG 저장</button>
       <button onClick={resetToSample}>샘플 불러오기</button>
       <button onClick={() => setShowGuide(true)}>사용 안내</button>
     </header>
@@ -128,17 +143,19 @@ function LeftPanel() {
 }
 
 function RightPanel() {
-  const [tab, setTab] = useState<'info' | 'vertical' | 'settings'>('info')
+  const [tab, setTab] = useState<'info' | 'vertical' | 'settings' | 'score'>('info')
   return (
     <aside className="panel right">
       <div className="tabs">
         <button className={tab === 'info' ? 'on' : ''} onClick={() => setTab('info')}>정보</button>
         <button className={tab === 'vertical' ? 'on' : ''} onClick={() => setTab('vertical')}>수직동선</button>
         <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>분석 설정</button>
+        <button className={tab === 'score' ? 'on' : ''} onClick={() => setTab('score')}>점수·등급</button>
       </div>
       {tab === 'info' && <InfoTab />}
       {tab === 'vertical' && <VerticalEditor />}
       {tab === 'settings' && <SettingsEditor />}
+      {tab === 'score' && <ScorePanel />}
     </aside>
   )
 }
@@ -155,6 +172,8 @@ function InfoTab() {
     [project, scenarioId, hoverId],
   )
   const res = analysis?.units.find((u) => u.unitId === hoverId)
+  const scoring = useScoring()
+  const sc = hoverId ? scoring?.byId.get(hoverId) : undefined
   const floorName = (id: string) => project.floors.find((f) => f.id === id)?.name ?? id
   return (
     <>
@@ -172,6 +191,12 @@ function InfoTab() {
               <dt>선택도</dt><dd>{fmt(res.metrics[rk]?.nach)}</dd>
               <dt>출입구 깊이</dt><dd>{fmt(res.entranceDepth)}</dd>
               <dt>가시성</dt><dd>{fmt(res.visibility, 0)}㎡</dd>
+            </>
+          )}
+          {sc && (
+            <>
+              <dt>등급</dt><dd><span className="gbadge" style={{ background: GRADE_COLORS[sc.grade], color: GRADE_TEXT[sc.grade] }}>{sc.grade}</span> {sc.rank}위 · {fmt(sc.score100, 1)}점</dd>
+              <dt>예상 임대료</dt><dd>{Math.round(sc.rentPerM2).toLocaleString()}원/㎡·월</dd>
             </>
           )}
         </dl>
@@ -195,7 +220,7 @@ function InfoTab() {
           <li key={k}><span className="dot sq" style={{ background: c }} />{VERTICAL_LABELS[k]}</li>
         ))}
       </ul>
-      <p className="hint">점수 가중치·등급·임대료·외부 요인·시뮬레이션 설정은 이후 단계에서 추가됩니다.</p>
+      <p className="hint">외부 요인·시뮬레이션 설정은 이후 단계에서 추가됩니다.</p>
     </>
   )
 }
@@ -204,7 +229,7 @@ function ResultPanel() {
   const project = useStore((s) => s.project)
   const scenarioId = useStore((s) => s.scenarioId)
   const analysis = useStore((s) => s.analysis)
-  const [tab, setTab] = useState<'units' | 'floors'>('units')
+  const [tab, setTab] = useState<'grades' | 'chart' | 'units' | 'floors'>('grades')
   const rows = useMemo(() => {
     const units = effectiveUnits(project, scenarioId)
     return floorsByLevel(project).reverse().map((f) => {
@@ -221,18 +246,21 @@ function ResultPanel() {
   return (
     <section className="results">
       <div className="tabs inline-tabs">
-        <button className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>호실별 분석</button>
+        <button className={tab === 'grades' ? 'on' : ''} onClick={() => setTab('grades')}>호실 등급표</button>
+        <button className={tab === 'chart' ? 'on' : ''} onClick={() => setTab('chart')}>층별 등급 분포</button>
+        <button className={tab === 'units' ? 'on' : ''} onClick={() => setTab('units')}>분석 지표</button>
         <button className={tab === 'floors' ? 'on' : ''} onClick={() => setTab('floors')}>층별 요약</button>
-        <span className="dim">등급표·차트·배치안 비교는 이후 단계에서 추가됩니다</span>
+        <span className="dim">배치안 비교는 이후 단계에서 추가됩니다</span>
       </div>
       {warnings.length > 0 && (
         <ul className="warnings">
           {warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
         </ul>
       )}
-      {tab === 'units' ? (
-        <UnitTable />
-      ) : (
+      {tab === 'grades' && <GradeTable />}
+      {tab === 'chart' && <GradeChart />}
+      {tab === 'units' && <UnitTable />}
+      {tab === 'floors' && (
         <table>
           <thead><tr><th>층</th><th>호실 수</th><th>임대 면적(㎡)</th><th>앵커 수</th></tr></thead>
           <tbody>

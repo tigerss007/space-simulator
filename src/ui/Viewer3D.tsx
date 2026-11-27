@@ -6,7 +6,8 @@ import { useStore, floorsByLevel } from '../store'
 import { effectiveUnits } from '../model/scenario'
 import type { Floor, Project, Unit, Vec2 } from '../model/types'
 import { heatColor, normalize, nodeValue, unitValue, valueRange } from './heat'
-import { categoryColor, ENTRANCE_COLORS, FLOOR_COLORS, UNKNOWN_COLOR, VERTICAL_COLORS } from './colors'
+import { useScoring } from './useScoring'
+import { GRADE_COLORS, categoryColor, ENTRANCE_COLORS, FLOOR_COLORS, UNKNOWN_COLOR, VERTICAL_COLORS } from './colors'
 
 // 평면 (x, y) → 3D (x, 높이, -y)
 const p3 = (p: Vec2, y: number): [number, number, number] => [p[0], y, -p[1]]
@@ -91,12 +92,18 @@ function Scene() {
   const metric = useStore((s) => s.viewMetric)
   const radiusKey = useStore((s) => s.radiusKey)
   const { sorted, yOf, shown } = useFloorLayout()
-  const heat = analysis && metric ? { a: analysis, m: metric, range: valueRange(analysis, metric, radiusKey) } : null
+  const scoring = useScoring()
+  const heatMetric = metric && metric !== 'grade' ? metric : null
+  const heat = analysis && heatMetric ? { a: analysis, m: heatMetric, range: valueRange(analysis, heatMetric, radiusKey) } : null
   const unitRes = useMemo(() => new Map((analysis?.units ?? []).map((u) => [u.unitId, u])), [analysis])
   const units = useMemo(() => effectiveUnits(project, scenarioId), [project, scenarioId])
   const floorIndex = Object.fromEntries(sorted.map((f, i) => [f.id, i]))
 
   const colorOf = (u: Unit) => {
+    if (metric === 'grade') {
+      const g = scoring?.byId.get(u.id)?.grade
+      return g ? GRADE_COLORS[g] : '#cfd3da'
+    }
     if (heat) {
       const r = unitRes.get(u.id)
       const v = r ? unitValue(r, heat.m, radiusKey) : null
